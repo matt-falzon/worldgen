@@ -93,6 +93,20 @@ PORT = "O"
 SEASIDE = "B"
 SWAMP = "W"
 JUNGLE = "J"
+RIVER = "U"
+DELTA = "L"
+
+# River flow direction chars - chosen based on direction of flow
+RIVER_CHARS = {
+    (0, 1): "│",    # down
+    (0, -1): "│",   # up
+    (1, 0): "─",    # right
+    (-1, 0): "─",   # left
+    (1, 1): "/",    # down-right
+    (-1, -1): "/",  # up-left
+    (1, -1): "ˋ",   # up-right
+    (-1, 1): "ˋ",   # down-left
+}
 
 TERRAIN_CHARS = {
     WATER_DEEP: "≈",
@@ -110,6 +124,8 @@ TERRAIN_CHARS = {
     SEASIDE: "░",
     SWAMP: "☼",
     JUNGLE: "♠",
+    RIVER: "│",
+    DELTA: "⊗",
 }
 
 # Terminal colors (ANSI)
@@ -129,6 +145,8 @@ COLORS = {
     SEASIDE: "\033[33m",
     SWAMP: "\033[33m",
     JUNGLE: "\033[32m",
+    RIVER: "\033[96m",
+    DELTA: "\033[34m",
 }
 
 # Seasonal color overlays
@@ -420,6 +438,76 @@ class World:
 
         self.cities = placed
 
+    def generate_rivers(self, num_rivers: int = 5):
+        # 1. Find potential sources
+        sources = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.grid[y][x] in (MOUNTAIN, SNOW):
+                    sources.append((x, y, self.heightmap[y][x]))
+        
+        sources.sort(key=lambda s: s[2], reverse=True)
+        sources = sources[:num_rivers * 3] # More than we strictly need
+        
+        rivers = []
+        
+        # 2. Trace rivers
+        for sx, sy, _ in sources:
+            if len(rivers) >= num_rivers: break
+            
+            path = [(sx, sy)]
+            curr_x, curr_y = sx, sy
+            visited = set([(sx, sy)])
+            
+            while True:
+                # Find downhill
+                best_neighbor = None
+                lowest_h = self.heightmap[curr_y][curr_x]
+                
+                for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]:
+                    nx, ny = curr_x + dx, curr_y + dy
+                    if 0 <= nx < self.width and 0 <= ny < self.height:
+                        if (nx, ny) not in visited:
+                            h = self.heightmap[ny][nx]
+                            if h < lowest_h:
+                                lowest_h = h
+                                best_neighbor = (nx, ny, dx, dy)
+                
+                if not best_neighbor: # Reached local minimum / coast
+                    break
+                    
+                nx, ny, dx, dy = best_neighbor
+                
+                # Check termination
+                if self.grid[ny][nx] in (WATER_DEEP, WATER_SHALLOW):
+                    # Finalize river and delta
+                    path.append((nx, ny))
+                    rivers.append(path)
+                    break
+                
+                if self.grid[ny][nx] == RIVER: # Merge
+                    path.append((nx, ny))
+                    rivers.append(path)
+                    break
+
+                # Continue
+                path.append((nx, ny))
+                visited.add((nx, ny))
+                curr_x, curr_y = nx, ny
+                if len(path) > 100: break # Max length
+        
+        # 3. Apply to grid
+        for path in rivers:
+            if len(path) < 10: continue
+            for i in range(len(path) - 1):
+                x, y = path[i]
+                if self.grid[y][x] not in (WATER_DEEP, WATER_SHALLOW, CITY, PORT, RIVER):
+                    self.grid[y][x] = RIVER
+            # Delta at the end
+            x, y = path[-1]
+            if self.grid[y][x] in (SAND, GRASS):
+                self.grid[y][x] = DELTA
+
     def generate(self):
         """Full world generation pipeline."""
         self.generate_heightmap()
@@ -427,6 +515,7 @@ class World:
         self.generate_temperature()
         self.classify_terrain()
         self.place_cities()
+        self.generate_rivers()
 
     def render(self, colored: bool = True) -> str:
         """Render the world to a string."""
@@ -575,6 +664,8 @@ class World:
             (PARK, "Park"),
             (INDUSTRIAL, "Industry"),
             (PORT, "Port"),
+            (RIVER, "River"),
+            (DELTA, "Delta"),
         ]
         legend_lines = []
         for terrain, name in items:
@@ -591,7 +682,7 @@ class World:
 
         lines = []
         total_cells = self.width * self.height
-        for terrain in [WATER_DEEP, WATER_SHALLOW, SAND, GRASS, FOREST, MOUNTAIN, SNOW, CITY, ROAD, PARK, INDUSTRIAL, PORT]:
+        for terrain in [WATER_DEEP, WATER_SHALLOW, SAND, GRASS, FOREST, MOUNTAIN, SNOW, CITY, ROAD, PARK, INDUSTRIAL, PORT, RIVER, DELTA]:
             count = terrain_counts.get(terrain, 0)
             pct = count / total_cells * 100
             name = {
@@ -607,6 +698,8 @@ class World:
                 PARK: "Parks",
                 INDUSTRIAL: "Industrial",
                 PORT: "Ports",
+                RIVER: "River",
+                DELTA: "Delta",
             }.get(terrain, terrain)
             bar = "█" * int(pct / 2)
             lines.append(f"  {bar:<30} {name:>14}: {pct:5.1f}%")
@@ -677,6 +770,7 @@ def generate_animated(world: World, steps: int = 5):
         ("Simulating temperature zones...", lambda: world.generate_temperature()),
         ("Classifying biomes...", lambda: world.classify_terrain()),
         ("Growing cities and roads...", lambda: world.place_cities()),
+        ("Tracing rivers and deltas...", lambda: world.generate_rivers()),
     ]
     for i, (msg, fn) in enumerate(messages):
         bar_len = 40
