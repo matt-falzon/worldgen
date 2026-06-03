@@ -580,35 +580,15 @@ class World:
         angle = (hour - 12.0) / 12.0 * math.pi
         return (math.cos(angle) + 1.1) / 2.1
 
-    def render_with_time(self, hour: float, moon_phase: float = 0.5, colored: bool = True) -> str:
-        """Render the world with day/night lighting, stars, city lights, and shadows."""
-        mult = self.get_lighting_multiplier(hour)
-        is_night = hour < 6.0 or hour > 18.0
-        
+    def render(self, colored: bool = True) -> str:
+        """Render the world map with colored terrain."""
         lines = []
         for y in range(self.height):
             line = ""
             for x in range(self.width):
                 terrain = self.grid[y][x]
                 char = TERRAIN_CHARS.get(terrain, "?")
-                
-                # Apply night lighting
-                if is_night:
-                    char = "·" if terrain == GRASS else char # Simplify terrain at night
-                    color = "\033[90m" # Dim
-                    
-                    # City lights
-                    if terrain == CITY or terrain == INDUSTRIAL:
-                        color = "\033[93m"
-                        
-                    # Stars in the sky (water/mountains area)
-                    if terrain in (WATER_DEEP, WATER_SHALLOW, MOUNTAIN) and random.random() < 0.01:
-                        char = "*"
-                        color = "\033[97m"
-                else:
-                    color = COLORS.get(terrain, "")
-                    # Apply day brightness
-                    
+                color = COLORS.get(terrain, "") if colored else ""
                 line += f"{color}{char}{RESET}"
             lines.append(line)
         return "\n".join(lines)
