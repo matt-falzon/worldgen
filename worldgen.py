@@ -11,6 +11,7 @@ import sys
 import time
 import os
 from typing import List, Tuple
+from worldgen.trade import compute_trade_routes, render_trade_stats
 
 # --- Perlin-ish noise (simplified value noise) ---
 
@@ -220,6 +221,7 @@ class World:
         self.heightmap: List[List[float]] = []
         self.cities: List[Tuple[int, int, str]] = []
         self.population: int = 0
+        self.trade_routes = []
 
     def generate_heightmap(self):
         scale = 0.03
@@ -516,6 +518,7 @@ class World:
         self.classify_terrain()
         self.place_cities()
         self.generate_rivers()
+        self.trade_routes = compute_trade_routes(self.grid, self.cities)
 
     def get_sun_angle(self, hour: float) -> float:
         """Returns the angle of the sun in radians: 0 at noon."""
@@ -979,6 +982,8 @@ def main():
         print()
         print(world.render_city_list())
         print()
+        print(render_trade_stats(world.trade_routes))
+        print()
         return
 
     generation = 0
@@ -1021,6 +1026,8 @@ def main():
         print(world.render_stats())
         print()
         print(world.render_city_list())
+        print()
+        print(render_trade_stats(world.trade_routes))
         print()
         return
 
