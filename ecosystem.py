@@ -10,11 +10,29 @@ class Animal:
     preferred_biome: str
     migration_range: int
     food: int = 10
+    def to_dict(self):
+        return dataclasses.asdict(self)
+
+    @classmethod
+    def from_dict(cls, data):
+        return cls(**data)
+
 
 class Ecosystem:
     def __init__(self, world):
         self.world = world
         self.animals: List[Animal] = []
+    def to_dict(self):
+        return {
+            "animals": [a.to_dict() for a in self.animals]
+        }
+
+    @classmethod
+    def from_dict(cls, data, world):
+        eco = cls(world)
+        eco.animals = [Animal.from_dict(a) for a in data["animals"]]
+        return eco
+
 
     def spawn_animals(self):
         for y in range(self.world.height):

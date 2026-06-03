@@ -11,7 +11,7 @@ import sys
 import time
 import os
 from typing import List, Tuple
-from worldgen.trade import compute_trade_routes, render_trade_stats
+from world_gen_pkg.trade import compute_trade_routes, render_trade_stats
 
 # --- Perlin-ish noise (simplified value noise) ---
 
@@ -509,6 +509,44 @@ class World:
             x, y = path[-1]
             if self.grid[y][x] in (SAND, GRASS):
                 self.grid[y][x] = DELTA
+
+    def to_dict(self):
+        return {
+            "width": self.width,
+            "height": self.height,
+            "seed": self.seed,
+            "grid": self.grid,
+            "moisture": self.moisture,
+            "temperature": self.temperature,
+            "heightmap": self.heightmap,
+            "cities": self.cities,
+            "population": self.population,
+            "trade_routes": self.trade_routes
+        }
+
+    @classmethod
+    def from_dict(cls, data):
+        world = cls(data["width"], data["height"], data["seed"])
+        world.grid = data["grid"]
+        world.moisture = data["moisture"]
+        world.temperature = data["temperature"]
+        world.heightmap = data["heightmap"]
+        world.cities = [tuple(c) for c in data["cities"]]
+        world.population = data["population"]
+        world.trade_routes = data["trade_routes"]
+        return world
+
+    def save(self, filename: str):
+        import json
+        with open(filename, 'w') as f:
+            json.dump(self.to_dict(), f)
+
+    @classmethod
+    def load(cls, filename: str):
+        import json
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        return cls.from_dict(data)
 
     def generate(self):
         """Full world generation pipeline."""
