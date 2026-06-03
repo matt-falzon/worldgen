@@ -498,7 +498,7 @@ class World:
         
         # 3. Apply to grid
         for path in rivers:
-            if len(path) < 10: continue
+            if len(path) < 5: continue
             for i in range(len(path) - 1):
                 x, y = path[i]
                 if self.grid[y][x] not in (WATER_DEEP, WATER_SHALLOW, CITY, PORT, RIVER):
