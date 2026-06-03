@@ -517,6 +517,17 @@ class World:
         self.place_cities()
         self.generate_rivers()
 
+    def get_sun_angle(self, hour: float) -> float:
+        """Returns the angle of the sun in radians: 0 at noon."""
+        return (hour - 12.0) / 12.0 * math.pi
+
+    def get_lighting_multiplier(self, hour: float) -> float:
+        """Returns a multiplier (0.0–1.0) for brightness based on hour."""
+        # Noon (12) = 1.0, Midnight (0/24) = 0.1
+        # Use cosine for smooth transition
+        angle = (hour - 12.0) / 12.0 * math.pi
+        return (math.cos(angle) + 1.1) / 2.1
+
     def render(self, colored: bool = True) -> str:
         """Render the world to a string."""
         lines = []
@@ -527,6 +538,67 @@ class World:
                 char = TERRAIN_CHARS.get(terrain, "?")
                 if colored:
                     color = COLORS.get(terrain, "")
+                    line += f"{color}{char}{RESET}"
+                else:
+                    line += char
+            lines.append(line)
+        return "\n".join(lines)
+
+    def render_with_time(self, hour: float, moon_phase: float = 0.5, colored: bool = True) -> str:
+        """Render the world with day/night lighting, stars, city lights, and shadows."""
+        is_night = hour < 6.0 or hour > 18.0
+        
+        # Calculate shadow map for mountains (simple gradient)
+        shadows = [[0.0 for _ in range(self.width)] for _ in range(self.height)]
+        if not is_night:
+            sun_dir = -self.get_sun_angle(hour) # Opposite: if sun is in East, shadow falls West
+            for y in range(self.height):
+                for x in range(self.width):
+                    if self.grid[y][x] == MOUNTAIN:
+                        shadow_len = int(self.heightmap[y][x] * 5)
+                        for i in range(1, shadow_len + 1):
+                            nx, ny = x + i * int(math.cos(sun_dir)), y + i * int(math.sin(sun_dir))
+                            if 0 <= nx < self.width and 0 <= ny < self.height:
+                                shadows[ny][nx] = max(shadows[ny][nx], 0.3)
+        
+        lines = []
+        for y in range(self.height):
+            line = ""
+            for x in range(self.width):
+                terrain = self.grid[y][x]
+                char = TERRAIN_CHARS.get(terrain, "?")
+                is_water = terrain in (WATER_DEEP, WATER_SHALLOW, SWAMP)
+                is_mountain = terrain == MOUNTAIN
+                
+                # Apply night lighting
+                if is_night:
+                    char = "·" if terrain == GRASS else char # Simplify terrain at night
+                    color = "\033[90m" # Dim
+                    
+                    # City lights
+                    if terrain == CITY or terrain == INDUSTRIAL:
+                        color = "\033[93m"
+                    elif terrain == ROAD:
+                        char = "."
+                        color = "\033[90m"
+                        
+                    # Moon brightness
+                    moon_mult = moon_phase * 0.5
+                    color = color if moon_mult > 0.2 else "\033[30m"
+                        
+                    # Stars in the sky (water/mountains area)
+                    # Simple noise check for star placement
+                    if not is_water and terrain != MOUNTAIN and random.random() < 0.05:
+                        char = "."
+                        color = "\033[97m"
+                else:
+                    color = COLORS.get(terrain, "\033[0m")
+                    # Apply shadow overlay
+                    if shadows[y][x] > 0:
+                        color = "\033[30m"
+                        char = "/" if is_mountain else "."
+                    
+                if colored:
                     line += f"{color}{char}{RESET}"
                 else:
                     line += char
