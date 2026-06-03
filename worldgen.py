@@ -1046,3 +1046,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+def get_world():
+    return World(120, 40)
